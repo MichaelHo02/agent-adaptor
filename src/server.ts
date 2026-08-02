@@ -198,7 +198,9 @@ server.registerTool(
               api_key_url: CURSOR_API_KEYS_URL,
               action: process.env.CURSOR_API_KEY
                 ? "CURSOR_API_KEY is configured."
-                : "Copy a Cursor User API Key, then call cursor_configure_from_clipboard.",
+                : process.platform === "darwin"
+                  ? "Copy a Cursor User API Key, then call cursor_configure_from_clipboard."
+                  : "Create a Cursor User API Key, set CURSOR_API_KEY, then restart the MCP server.",
             },
             null,
             2,

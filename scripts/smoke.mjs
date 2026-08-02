@@ -15,7 +15,7 @@ const transport = new StdioClientTransport({
   command: "node",
   args: ["./dist/server.mjs"],
   cwd: "plugins/agent-adaptor",
-  env: { HOME: smokeHome, PATH: `${smokeBin}:${process.env.PATH ?? ""}` },
+  env: { CURSOR_API_KEY: "", HOME: smokeHome, PATH: `${smokeBin}:${process.env.PATH ?? ""}` },
 });
 
 await client.connect(transport);
@@ -33,7 +33,10 @@ try {
   const auth = JSON.parse(authStatus.content[0].text);
   assert.equal(auth.api_key_present, false);
   assert.equal(auth.api_key_url, "https://cursor.com/dashboard/api?section=user-keys#user-api-keys");
-  assert.match(auth.action, /cursor_configure_from_clipboard/);
+  assert.match(
+    auth.action,
+    process.platform === "darwin" ? /cursor_configure_from_clipboard/ : /Set CURSOR_API_KEY/,
+  );
   assert.doesNotMatch(JSON.stringify(auth), /cursor-agent login|CURSOR_API_KEY_FILE/);
   const missingKey = await client.callTool({
     name: "cursor_run",
@@ -48,13 +51,18 @@ try {
     name: "cursor_configure_from_clipboard",
     arguments: {},
   });
-  assert.notEqual(configured.isError, true);
-  const envFile = join(smokeHome, ".config", "agent-adaptor", ".env");
-  assert.equal(readFileSync(envFile, "utf8"), 'CURSOR_API_KEY="cursor_test_key_1234567890"\n');
-  assert.equal(statSync(join(smokeHome, ".config", "agent-adaptor")).mode & 0o777, 0o700);
-  assert.equal(statSync(envFile).mode & 0o777, 0o600);
-  const configuredStatus = await client.callTool({ name: "cursor_auth_status", arguments: {} });
-  assert.equal(JSON.parse(configuredStatus.content[0].text).api_key_present, true);
+  if (process.platform === "darwin") {
+    assert.notEqual(configured.isError, true);
+    const envFile = join(smokeHome, ".config", "agent-adaptor", ".env");
+    assert.equal(readFileSync(envFile, "utf8"), 'CURSOR_API_KEY="cursor_test_key_1234567890"\n');
+    assert.equal(statSync(join(smokeHome, ".config", "agent-adaptor")).mode & 0o777, 0o700);
+    assert.equal(statSync(envFile).mode & 0o777, 0o600);
+    const configuredStatus = await client.callTool({ name: "cursor_auth_status", arguments: {} });
+    assert.equal(JSON.parse(configuredStatus.content[0].text).api_key_present, true);
+  } else {
+    assert.equal(configured.isError, true);
+    assert.match(configured.content[0].text, /supports macOS only/);
+  }
   console.log(`MCP smoke test passed: ${names.join(", ")}`);
 } finally {
   await client.close();
