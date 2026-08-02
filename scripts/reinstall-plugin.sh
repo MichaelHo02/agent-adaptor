@@ -63,4 +63,4 @@ if [[ "$RUN_SMOKE" == true ]]; then
   npm run smoke
 fi
 
-echo "==> Done. Start a new Codex task, copy a Cursor User API Key, and ask Agent Adaptor to configure Cursor from the clipboard."
+echo "==> Done. Fully restart Codex, then start a new task so it loads this plugin cache version."

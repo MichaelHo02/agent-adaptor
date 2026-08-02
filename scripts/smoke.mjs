@@ -10,8 +10,15 @@ const pluginManifest = JSON.parse(
   readFileSync("plugins/agent-adaptor/.codex-plugin/plugin.json", "utf8"),
 );
 const appManifest = JSON.parse(readFileSync("plugins/agent-adaptor/.app.json", "utf8"));
+const mcpManifest = JSON.parse(readFileSync("plugins/agent-adaptor/.mcp.json", "utf8"));
 assert.equal(pluginManifest.apps, "./.app.json", "MCP App plugins must declare app packaging.");
 assert.deepEqual(appManifest, { apps: {} });
+assert.deepEqual(mcpManifest.mcpServers?.cursor, {
+  command: "node",
+  args: ["./dist/server.mjs"],
+  cwd: ".",
+  env_vars: ["CURSOR_API_KEY"],
+});
 const smokeHome = mkdtempSync(join(tmpdir(), "agent-adaptor-smoke-"));
 const server = {
   command: "node",

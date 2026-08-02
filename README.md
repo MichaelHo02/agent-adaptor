@@ -38,7 +38,7 @@ codex plugin marketplace add "$PWD"
 codex plugin add agent-adaptor@agent-adaptor
 ```
 
-Start a new Codex task after installation so Codex discovers the plugin tools.
+Fully restart Codex after installation, then start a new task so Codex discovers the installed plugin tools and MCP App UI.
 
 ## Cursor API-key configuration
 
