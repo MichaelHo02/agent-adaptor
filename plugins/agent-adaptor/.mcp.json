@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "agent_adaptor": {
+      "command": "node",
+      "args": ["./dist/server.mjs"],
+      "cwd": ".",
+      "env_vars": ["CURSOR_API_KEY"]
+    }
+  }
+}
