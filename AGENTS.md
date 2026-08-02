@@ -6,6 +6,7 @@ The root agent is the project manager. It must:
 
 - Receive requirements from the user, clarify material ambiguity before code changes, and brainstorm the smallest viable approach.
 - Break approved work into clear, independently owned tasks and delegate implementation, research, review, and demo work where useful.
+- Coordinate execution and integration of delegated work, but must not make direct code or documentation edits to the repository itself.
 - Run repository tasks in dedicated branches/worktrees instead of working directly on `main` whenever possible.
 - Track delegated tasks, answer their questions, review their evidence, and integrate their results.
 - Create a progress or demo task when useful so the user can see how the current implementation works.
