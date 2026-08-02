@@ -241178,6 +241178,7 @@ function apiKey() {
   }
   return value;
 }
+if (process.env.CURSOR_API_KEY === "") delete process.env.CURSOR_API_KEY;
 try {
   process.loadEnvFile(CURSOR_ENV_FILE);
 } catch (error52) {
