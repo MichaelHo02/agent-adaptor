@@ -2,10 +2,11 @@
 
 Agent Adaptor is a Codex plugin that delegates coding tasks to Cursor agents running against your current local checkout.
 
-It uses Cursor's official TypeScript SDK and exposes two MCP tools:
+It uses Cursor's official TypeScript SDK and exposes three MCP tools:
 
 - `cursor_run` starts a new Cursor agent.
 - `cursor_follow_up` continues the same agent conversation.
+- `cursor_auth_status` checks MCP auth wiring and `cursor-agent status` output.
 
 Cursor can read, edit, and run code in the checkout you pass. Review its changes as you would any other coding agent.
 
@@ -24,11 +25,52 @@ npm install
 npm run check
 npm run build
 export CURSOR_API_KEY="your-key"
+```
+
+## First-time auth flow
+
+If you prefer browser auth first, run:
+
+```sh
+npm run cursor-auth
+```
+
+This opens Cursor's login flow in a browser. After success, copy your Cursor API key from the integrations dashboard and set it in the MCP process environment (or provide `CURSOR_API_KEY_FILE`).
+Cursor's website login does not currently emit the token back to this plugin process automatically.
+
+To quickly check the plugin auth wiring after auth, use this MCP tool:
+
+- `cursor_auth_status` (reports whether `CURSOR_API_KEY` is available to MCP and `cursor-agent status` output)
+
+Then continue:
+
+```sh
+export CURSOR_API_KEY="your-key"
 codex plugin marketplace add "$PWD"
 codex plugin add agent-adaptor@agent-adaptor
 ```
 
 Start a new Codex task after installation so Codex discovers the plugin tools.
+
+## Repeatable install (testing)
+
+```sh
+chmod +x scripts/reinstall-plugin.sh
+npm run reinstall-plugin -- --smoke
+```
+
+With browser auth flow in the same run:
+
+```sh
+npm run reinstall-plugin -- --auth --smoke
+```
+
+With an already-exported key:
+
+```sh
+export CURSOR_API_KEY="your-key"
+npm run reinstall-plugin -- --smoke
+```
 
 ## Development
 

@@ -13,7 +13,7 @@ const transport = new StdioClientTransport({
 await client.connect(transport);
 try {
   const names = (await client.listTools()).tools.map(({ name }) => name).sort();
-  assert.deepEqual(names, ["cursor_follow_up", "cursor_run"]);
+  assert.deepEqual(names, ["cursor_auth_status", "cursor_follow_up", "cursor_run"]);
   const missingKey = await client.callTool({
     name: "cursor_run",
     arguments: { cwd: process.cwd(), prompt: "test" },

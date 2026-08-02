@@ -4,7 +4,7 @@
       "command": "node",
       "args": ["./dist/server.mjs"],
       "cwd": ".",
-      "env_vars": ["CURSOR_API_KEY"]
+      "env_vars": ["CURSOR_API_KEY", "CURSOR_API_KEY_FILE"]
     }
   }
 }

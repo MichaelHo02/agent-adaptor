@@ -241132,6 +241132,10 @@ var StdioServerTransport = class {
   }
 };
 
+// src/server.ts
+import { readFileSync as readFileSync2 } from "node:fs";
+import { spawnSync } from "node:child_process";
+
 // src/checkout.ts
 import { realpath, stat } from "node:fs/promises";
 async function resolveCheckout(cwd) {
@@ -241150,10 +241154,37 @@ var writeAnnotations = {
   idempotentHint: false,
   openWorldHint: true
 };
+var authReadOnlyAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+};
 function apiKey() {
+  const fromFile = process.env.CURSOR_API_KEY_FILE;
+  if (fromFile) {
+    const key = readFileSync2(fromFile, "utf8").trim();
+    if (key) return key;
+  }
   const value = process.env.CURSOR_API_KEY;
   if (!value) throw new Error("CURSOR_API_KEY is not configured for Agent Adaptor");
   return value;
+}
+function safeCliStatus() {
+  const child = spawnSync("cursor-agent", ["status"], {
+    encoding: "utf8",
+    timeout: 5e3,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  if (child.error) {
+    return { ok: false, error: `cursor-agent command not available: ${child.error.message}` };
+  }
+  return {
+    ok: child.status === 0,
+    exitCode: child.status ?? -1,
+    stdout: (child.stdout ?? "").trim() || "<empty>",
+    stderr: (child.stderr ?? "").trim() || "<empty>"
+  };
 }
 function response(result, agentId) {
   const payload = {
@@ -241229,6 +241260,33 @@ server.registerTool(
       agent.close();
     }
   })
+);
+server.registerTool(
+  "cursor_auth_status",
+  {
+    title: "Check Cursor auth status",
+    description: "Check whether CURSOR_API_KEY is configured for this MCP process and print cursor-agent login status.",
+    inputSchema: {},
+    annotations: authReadOnlyAnnotations
+  },
+  () => failure(async () => ({
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            auth_source: process.env.CURSOR_API_KEY_FILE ? `CURSOR_API_KEY_FILE (${process.env.CURSOR_API_KEY_FILE})` : process.env.CURSOR_API_KEY ? "CURSOR_API_KEY" : "not configured",
+            env_key_present: !!process.env.CURSOR_API_KEY,
+            key_file_present: !!process.env.CURSOR_API_KEY_FILE,
+            cursor_cli_status: safeCliStatus(),
+            next_step: process.env.CURSOR_API_KEY || process.env.CURSOR_API_KEY_FILE ? "MCP can use existing credentials. If tools still fail, run `cursor-agent login` and restart Codex task." : "Run `npm run cursor-auth` in this repo to launch browser login, then set CURSOR_API_KEY for the Codex MCP process."
+          },
+          null,
+          2
+        )
+      }
+    ]
+  }))
 );
 await server.connect(new StdioServerTransport());
 /*! Bundled license information:
