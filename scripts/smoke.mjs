@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 assert.equal(process.platform, "darwin", "MCP smoke test currently supports macOS only.");
+const pluginManifest = JSON.parse(
+  readFileSync("plugins/agent-adaptor/.codex-plugin/plugin.json", "utf8"),
+);
+const appManifest = JSON.parse(readFileSync("plugins/agent-adaptor/.app.json", "utf8"));
+assert.equal(pluginManifest.apps, "./.app.json", "MCP App plugins must declare app packaging.");
+assert.deepEqual(appManifest, { apps: {} });
 const smokeHome = mkdtempSync(join(tmpdir(), "agent-adaptor-smoke-"));
 const server = {
   command: "node",

@@ -1,6 +1,6 @@
 {
   "name": "agent-adaptor",
-  "version": "0.1.0+codex.1785656241638",
+  "version": "0.1.0+codex.1785662350998",
   "description": "Delegate work from Codex to a local Cursor agent.",
   "author": {
     "name": "H\u1ed3 L\u00ea Minh Th\u1ea1ch",
@@ -15,6 +15,7 @@
     "mcp"
   ],
   "skills": "./skills/",
+  "apps": "./.app.json",
   "interface": {
     "displayName": "Agent Adaptor",
     "shortDescription": "Delegate local coding work to Cursor.",
