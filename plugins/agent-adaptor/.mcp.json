@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "agent_adaptor": {
+    "cursor": {
       "command": "node",
       "args": ["./dist/server.mjs"],
       "cwd": ".",

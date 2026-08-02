@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "reinstall-plugin": "./scripts/reinstall-plugin.sh",
     "check": "tsc --noEmit && node --import tsx --test test/*.test.ts",
     "smoke": "node scripts/smoke.mjs",
     "prepare": "npm run build"

@@ -1,3 +1,4 @@
+import { createRequire } from "node:module"; const require = createRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -241132,6 +241133,34 @@ var StdioServerTransport = class {
   }
 };
 
+// src/server.ts
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { chmodSync as chmodSync3, mkdirSync as mkdirSync3, renameSync, rmSync as rmSync3, writeFileSync as writeFileSync2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { dirname as dirname3, join as join2 } from "node:path";
+
+// src/clipboard-confirmation.ts
+import { spawnSync } from "node:child_process";
+function requestSystemConfirmation() {
+  return spawnSync(
+    "/usr/bin/osascript",
+    [
+      "-l",
+      "JavaScript",
+      "-e",
+      'const app = Application.currentApplication(); app.includeStandardAdditions = true; app.displayDialog("Agent Adaptor wants to read your clipboard and save it as the Cursor API key.", {withTitle: "Agent Adaptor", buttons: ["Cancel", "Allow"], defaultButton: "Cancel", cancelButton: "Cancel", withIcon: "caution"});'
+    ],
+    { encoding: "utf8", timeout: 6e4 }
+  );
+}
+function confirmClipboardAccess(request3 = requestSystemConfirmation) {
+  const confirmation = request3();
+  if (confirmation.error) {
+    throw new Error(`Could not request clipboard confirmation: ${confirmation.error.message}`);
+  }
+  if (confirmation.status !== 0) throw new Error("Clipboard configuration cancelled.");
+}
+
 // src/checkout.ts
 import { realpath, stat } from "node:fs/promises";
 async function resolveCheckout(cwd) {
@@ -241143,17 +241172,73 @@ async function resolveCheckout(cwd) {
 }
 
 // src/server.ts
-var server = new McpServer({ name: "agent-adaptor", version: "0.1.0" });
+var CURSOR_API_KEYS_URL = "https://cursor.com/dashboard/api?section=user-keys#user-api-keys";
+var CURSOR_ENV_FILE = join2(homedir2(), ".config", "agent-adaptor", ".env");
+var server = new McpServer({ name: "cursor", version: "0.1.0" });
 var writeAnnotations = {
   readOnlyHint: false,
   destructiveHint: true,
   idempotentHint: false,
   openWorldHint: true
 };
+var authReadOnlyAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+};
+var authWriteAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false
+};
 function apiKey() {
   const value = process.env.CURSOR_API_KEY;
-  if (!value) throw new Error("CURSOR_API_KEY is not configured for Agent Adaptor");
+  if (!value) {
+    throw new Error(`CURSOR_API_KEY is not configured. Create one at ${CURSOR_API_KEYS_URL}`);
+  }
   return value;
+}
+if (process.env.CURSOR_API_KEY === "") delete process.env.CURSOR_API_KEY;
+try {
+  process.loadEnvFile(CURSOR_ENV_FILE);
+} catch (error52) {
+  if (error52.code !== "ENOENT") throw error52;
+}
+function configureFromClipboard() {
+  if (process.platform !== "darwin") {
+    throw new Error("Clipboard setup currently supports macOS only. Set CURSOR_API_KEY instead.");
+  }
+  confirmClipboardAccess();
+  const clipboard = spawnSync2("/usr/bin/pbpaste", { encoding: "utf8", timeout: 5e3 });
+  if (clipboard.error || clipboard.status !== 0) {
+    throw new Error(`Could not read the clipboard: ${clipboard.error?.message ?? "pbpaste failed"}`);
+  }
+  const key = clipboard.stdout.trim();
+  if (!/^[A-Za-z0-9._~+/=-]{20,}$/.test(key)) {
+    throw new Error("Clipboard does not contain a valid single-line Cursor API key.");
+  }
+  const directory = dirname3(CURSOR_ENV_FILE);
+  const temporaryFile = `${CURSOR_ENV_FILE}.${process.pid}.tmp`;
+  mkdirSync3(directory, { recursive: true, mode: 448 });
+  chmodSync3(directory, 448);
+  try {
+    writeFileSync2(temporaryFile, `CURSOR_API_KEY="${key}"
+`, { flag: "wx", mode: 384 });
+    renameSync(temporaryFile, CURSOR_ENV_FILE);
+    chmodSync3(CURSOR_ENV_FILE, 384);
+  } finally {
+    rmSync3(temporaryFile, { force: true });
+  }
+  process.env.CURSOR_API_KEY = key;
+  const cleared = spawnSync2("/usr/bin/pbcopy", { input: "", encoding: "utf8", timeout: 5e3 });
+  return {
+    configured: true,
+    location: CURSOR_ENV_FILE,
+    clipboard_cleared: !cleared.error && cleared.status === 0,
+    action: "Cursor is configured for this and future Codex tasks."
+  };
 }
 function response(result, agentId) {
   const payload = {
@@ -241177,6 +241262,18 @@ async function failure(operation) {
     };
   }
 }
+server.registerTool(
+  "cursor_configure_from_clipboard",
+  {
+    title: "Configure Cursor from clipboard",
+    description: "On macOS, ask for native confirmation before securely saving a copied Cursor User API Key.",
+    inputSchema: {},
+    annotations: authWriteAnnotations
+  },
+  () => failure(async () => ({
+    content: [{ type: "text", text: JSON.stringify(configureFromClipboard(), null, 2) }]
+  }))
+);
 server.registerTool(
   "cursor_run",
   {
@@ -241229,6 +241326,31 @@ server.registerTool(
       agent.close();
     }
   })
+);
+server.registerTool(
+  "cursor_auth_status",
+  {
+    title: "Check Cursor auth status",
+    description: "Check whether CURSOR_API_KEY is configured for the Cursor MCP process.",
+    inputSchema: {},
+    annotations: authReadOnlyAnnotations
+  },
+  () => failure(async () => ({
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            api_key_present: !!process.env.CURSOR_API_KEY,
+            api_key_url: CURSOR_API_KEYS_URL,
+            action: process.env.CURSOR_API_KEY ? "CURSOR_API_KEY is configured." : process.platform === "darwin" ? "Copy a Cursor User API Key, then call cursor_configure_from_clipboard." : "Create a Cursor User API Key, set CURSOR_API_KEY, then restart the MCP server."
+          },
+          null,
+          2
+        )
+      }
+    ]
+  }))
 );
 await server.connect(new StdioServerTransport());
 /*! Bundled license information:

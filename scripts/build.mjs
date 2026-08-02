@@ -5,6 +5,7 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
+  banner: { js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' },
   outfile: "plugins/agent-adaptor/dist/server.mjs",
   plugins: [
     {

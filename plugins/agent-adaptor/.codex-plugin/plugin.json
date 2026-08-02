@@ -1,22 +1,30 @@
 {
   "name": "agent-adaptor",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.1785656241638",
   "description": "Delegate work from Codex to a local Cursor agent.",
   "author": {
-    "name": "Hồ Lê Minh Thạch",
+    "name": "H\u1ed3 L\u00ea Minh Th\u1ea1ch",
     "url": "https://github.com/MichaelHo02"
   },
   "repository": "https://github.com/MichaelHo02/agent-adaptor",
   "license": "MIT",
-  "keywords": ["codex", "cursor", "agent", "mcp"],
+  "keywords": [
+    "codex",
+    "cursor",
+    "agent",
+    "mcp"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Adaptor",
     "shortDescription": "Delegate local coding work to Cursor.",
     "longDescription": "Agent Adaptor lets Codex start and continue Cursor agents against an exact local checkout through Cursor's official SDK.",
-    "developerName": "Hồ Lê Minh Thạch",
+    "developerName": "H\u1ed3 L\u00ea Minh Th\u1ea1ch",
     "category": "Developer Tools",
-    "capabilities": ["Interactive", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
     "defaultPrompt": [
       "Ask Cursor to inspect this checkout.",
       "Delegate this coding task to Cursor.",
