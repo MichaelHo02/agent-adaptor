@@ -25,28 +25,21 @@ cd agent-adaptor
 npm install
 npm run check
 npm run build
-export CURSOR_API_KEY="your-key"
-```
-
-## Cursor API-key configuration
-
-Create and copy a key at [Cursor User API Keys](https://cursor.com/dashboard/api?section=user-keys#user-api-keys), then ask Codex to configure Cursor from your clipboard. The `cursor_configure_from_clipboard` tool saves it to `~/.config/agent-adaptor/.env` with owner-only permissions, clears the clipboard, and enables Cursor immediately.
-
-The plugin never accepts the key as a tool argument or returns it in tool output. `CURSOR_API_KEY` remains available as an environment-variable override.
-
-To quickly check the plugin auth wiring after auth, use this MCP tool:
-
-- `cursor_auth_status` (reports whether `CURSOR_API_KEY` is available to the `cursor` MCP)
-
-Then continue:
-
-```sh
-export CURSOR_API_KEY="your-key"
 codex plugin marketplace add "$PWD"
 codex plugin add agent-adaptor@agent-adaptor
 ```
 
 Start a new Codex task after installation so Codex discovers the plugin tools.
+
+## Cursor API-key configuration
+
+Create and copy a key at [Cursor User API Keys](https://cursor.com/dashboard/api?section=user-keys#user-api-keys), then ask Codex to configure Cursor from your clipboard. Approve the native macOS confirmation dialog. The `cursor_configure_from_clipboard` tool then saves the key to `~/.config/agent-adaptor/.env` with owner-only permissions, clears the clipboard, and enables Cursor immediately.
+
+Alternatively, set `CURSOR_API_KEY` before starting Codex. The plugin never accepts the key as a tool argument or returns it in tool output.
+
+To quickly check the plugin auth wiring after auth, use this MCP tool:
+
+- `cursor_auth_status` (reports whether `CURSOR_API_KEY` is available to the `cursor` MCP)
 
 ## Repeatable install (testing)
 
@@ -73,6 +66,6 @@ The committed bundle lets the plugin run from this checkout. Rebuild it after ch
 
 ## Security
 
-The saved key file and its parent directory use owner-only permissions. `CURSOR_API_KEY` can override the saved value and is never accepted as a tool argument. Cursor's local agent runs with the permissions and sandbox policy configured for Cursor on your machine.
+The clipboard is read only after the user approves a native macOS confirmation dialog. The saved key file and its parent directory use owner-only permissions. `CURSOR_API_KEY` can override the saved value and is never accepted as a tool argument. Cursor's local agent runs with the permissions and sandbox policy configured for Cursor on your machine.
 
 As of the initial release, `npm audit` reports an unfixed `undici` advisory inherited through the official Cursor SDK. Recheck the audit before production use and update the SDK when Cursor ships a patched dependency chain.

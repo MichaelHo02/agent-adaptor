@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
+import { confirmClipboardAccess } from "./clipboard-confirmation.js";
 import { resolveCheckout } from "./checkout.js";
 
 const CURSOR_API_KEYS_URL = "https://cursor.com/dashboard/api?section=user-keys#user-api-keys";
@@ -52,7 +53,8 @@ function configureFromClipboard() {
     throw new Error("Clipboard setup currently supports macOS only. Set CURSOR_API_KEY instead.");
   }
 
-  const clipboard = spawnSync("pbpaste", { encoding: "utf8", timeout: 5_000 });
+  confirmClipboardAccess();
+  const clipboard = spawnSync("/usr/bin/pbpaste", { encoding: "utf8", timeout: 5_000 });
   if (clipboard.error || clipboard.status !== 0) {
     throw new Error(`Could not read the clipboard: ${clipboard.error?.message ?? "pbpaste failed"}`);
   }
@@ -75,7 +77,7 @@ function configureFromClipboard() {
   }
 
   process.env.CURSOR_API_KEY = key;
-  const cleared = spawnSync("pbcopy", { input: "", encoding: "utf8", timeout: 5_000 });
+  const cleared = spawnSync("/usr/bin/pbcopy", { input: "", encoding: "utf8", timeout: 5_000 });
   return {
     configured: true,
     location: CURSOR_ENV_FILE,
@@ -113,7 +115,7 @@ server.registerTool(
   {
     title: "Configure Cursor from clipboard",
     description:
-      "On macOS, securely save a copied Cursor User API Key without exposing it in prompts or tool output.",
+      "On macOS, ask for native confirmation before securely saving a copied Cursor User API Key.",
     inputSchema: {},
     annotations: authWriteAnnotations,
   },

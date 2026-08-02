@@ -241134,10 +241134,32 @@ var StdioServerTransport = class {
 };
 
 // src/server.ts
-import { spawnSync } from "node:child_process";
+import { spawnSync as spawnSync2 } from "node:child_process";
 import { chmodSync as chmodSync3, mkdirSync as mkdirSync3, renameSync, rmSync as rmSync3, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { dirname as dirname3, join as join2 } from "node:path";
+
+// src/clipboard-confirmation.ts
+import { spawnSync } from "node:child_process";
+function requestSystemConfirmation() {
+  return spawnSync(
+    "/usr/bin/osascript",
+    [
+      "-l",
+      "JavaScript",
+      "-e",
+      'const app = Application.currentApplication(); app.includeStandardAdditions = true; app.displayDialog("Agent Adaptor wants to read your clipboard and save it as the Cursor API key.", {withTitle: "Agent Adaptor", buttons: ["Cancel", "Allow"], defaultButton: "Cancel", cancelButton: "Cancel", withIcon: "caution"});'
+    ],
+    { encoding: "utf8", timeout: 6e4 }
+  );
+}
+function confirmClipboardAccess(request3 = requestSystemConfirmation) {
+  const confirmation = request3();
+  if (confirmation.error) {
+    throw new Error(`Could not request clipboard confirmation: ${confirmation.error.message}`);
+  }
+  if (confirmation.status !== 0) throw new Error("Clipboard configuration cancelled.");
+}
 
 // src/checkout.ts
 import { realpath, stat } from "node:fs/promises";
@@ -241188,7 +241210,8 @@ function configureFromClipboard() {
   if (process.platform !== "darwin") {
     throw new Error("Clipboard setup currently supports macOS only. Set CURSOR_API_KEY instead.");
   }
-  const clipboard = spawnSync("pbpaste", { encoding: "utf8", timeout: 5e3 });
+  confirmClipboardAccess();
+  const clipboard = spawnSync2("/usr/bin/pbpaste", { encoding: "utf8", timeout: 5e3 });
   if (clipboard.error || clipboard.status !== 0) {
     throw new Error(`Could not read the clipboard: ${clipboard.error?.message ?? "pbpaste failed"}`);
   }
@@ -241209,7 +241232,7 @@ function configureFromClipboard() {
     rmSync3(temporaryFile, { force: true });
   }
   process.env.CURSOR_API_KEY = key;
-  const cleared = spawnSync("pbcopy", { input: "", encoding: "utf8", timeout: 5e3 });
+  const cleared = spawnSync2("/usr/bin/pbcopy", { input: "", encoding: "utf8", timeout: 5e3 });
   return {
     configured: true,
     location: CURSOR_ENV_FILE,
@@ -241243,7 +241266,7 @@ server.registerTool(
   "cursor_configure_from_clipboard",
   {
     title: "Configure Cursor from clipboard",
-    description: "On macOS, securely save a copied Cursor User API Key without exposing it in prompts or tool output.",
+    description: "On macOS, ask for native confirmation before securely saving a copied Cursor User API Key.",
     inputSchema: {},
     annotations: authWriteAnnotations
   },
