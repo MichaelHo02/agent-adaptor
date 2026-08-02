@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cursor session</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        background: var(--color-background-primary, Canvas);
+        color: var(--color-text-primary, CanvasText);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 16px; }
+      main { display: grid; gap: 14px; max-width: 920px; margin: 0 auto; }
+      header, section {
+        border: 1px solid var(--color-border-secondary, color-mix(in srgb, CanvasText 20%, transparent));
+        border-radius: 12px;
+        padding: 14px;
+        background: var(--color-background-secondary, color-mix(in srgb, Canvas 96%, CanvasText));
+      }
+      h1, h2 { margin: 0; }
+      h1 { font-size: 1.25rem; }
+      h2 { font-size: 1rem; margin-bottom: 10px; }
+      .topline, .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .topline { justify-content: space-between; }
+      .badge {
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: .78rem;
+        font-weight: 650;
+      }
+      .warning {
+        margin: 10px 0 0;
+        padding: 9px 10px;
+        border-left: 3px solid var(--color-border-warning, #b87503);
+        background: var(--color-background-warning, color-mix(in srgb, #f4a000 12%, Canvas));
+      }
+      dl { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 7px 12px; margin: 0; }
+      dt { color: var(--color-text-secondary, GrayText); }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: .84rem/1.45 var(--font-mono, ui-monospace, monospace);
+      }
+      #activity { max-height: 340px; overflow: auto; }
+      .event { padding: 8px 0; border-top: 1px solid var(--color-border-tertiary, color-mix(in srgb, CanvasText 12%, transparent)); }
+      .event:first-child { border-top: 0; }
+      .event-meta { color: var(--color-text-secondary, GrayText); font-size: .76rem; margin-bottom: 4px; }
+      label { display: block; font-weight: 650; margin-bottom: 6px; }
+      textarea {
+        width: 100%; min-height: 76px; resize: vertical; padding: 9px;
+        border: 1px solid var(--color-border-primary, GrayText); border-radius: 8px;
+        background: var(--color-background-primary, Canvas); color: inherit; font: inherit;
+      }
+      button {
+        padding: 8px 12px; border: 1px solid var(--color-border-primary, GrayText);
+        border-radius: 8px; background: var(--color-background-tertiary, ButtonFace);
+        color: inherit; font: inherit; cursor: pointer;
+      }
+      button:disabled { cursor: not-allowed; opacity: .5; }
+      #error { color: var(--color-text-danger, #b42318); }
+      .muted { color: var(--color-text-secondary, GrayText); }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="topline">
+          <h1>Live Cursor session</h1>
+          <div class="topline">
+            <span id="mode" class="badge">Mode</span>
+            <span id="status" class="badge" aria-live="polite">Connecting</span>
+          </div>
+        </div>
+        <p id="agent-warning" class="warning" role="note" hidden>
+          Agent mode may edit files or run commands in this checkout. Review its work before keeping it.
+        </p>
+      </header>
+
+      <section aria-labelledby="details-heading">
+        <h2 id="details-heading">Session</h2>
+        <dl>
+          <dt>Auth</dt><dd id="auth">Checking</dd>
+          <dt>Checkout</dt><dd id="checkout">—</dd>
+          <dt>Model</dt><dd id="model">—</dd>
+          <dt>Prompt</dt><dd><pre id="prompt">—</pre></dd>
+          <dt>Run</dt><dd id="run">—</dd>
+          <dt>Usage</dt><dd id="usage">—</dd>
+        </dl>
+      </section>
+
+      <section aria-labelledby="activity-heading">
+        <h2 id="activity-heading">Agent output and tool activity</h2>
+        <div id="activity" aria-live="polite"><p class="muted">Waiting for activity…</p></div>
+      </section>
+
+      <section id="result-section" aria-labelledby="result-heading" hidden>
+        <h2 id="result-heading">Final response</h2>
+        <pre id="response"></pre>
+        <p id="error" role="alert"></p>
+      </section>
+
+      <section aria-labelledby="controls-heading">
+        <h2 id="controls-heading">Controls</h2>
+        <label for="follow-up">Follow-up instruction</label>
+        <textarea id="follow-up" placeholder="Ask Cursor to inspect, explain, or adjust its result"></textarea>
+        <div class="actions">
+          <button id="send" type="button" disabled>Send follow-up</button>
+          <button id="cancel" type="button" disabled>Cancel run</button>
+          <button id="retry" type="button" disabled>Retry</button>
+        </div>
+        <p id="ui-error" role="alert"></p>
+      </section>
+    </main>
+    <script>/* APP_SCRIPT */</script>
+  </body>
+</html>

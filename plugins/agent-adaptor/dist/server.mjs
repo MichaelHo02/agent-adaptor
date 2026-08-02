@@ -38673,7 +38673,7 @@ Content-Type: ${c5.type || "application/octet-stream"}\r
             })));
           }
         }
-        
+
         if (${n6}.value === undefined) {
           if (${o5} in input) {
             newResult[${o5}] = undefined;
@@ -38681,7 +38681,7 @@ Content-Type: ${c5.type || "application/octet-stream"}\r
         } else {
           newResult[${o5}] = ${n6}.value;
         }
-        
+
       `) : t4.write(`
         if (${n6}.issues.length) {
           payload.issues = payload.issues.concat(${n6}.issues.map(iss => ({
@@ -38689,7 +38689,7 @@ Content-Type: ${c5.type || "application/octet-stream"}\r
             path: iss.path ? [${o5}, ...iss.path] : [${o5}]
           })));
         }
-        
+
         if (${n6}.value === undefined) {
           if (${o5} in input) {
             newResult[${o5}] = undefined;
@@ -38697,7 +38697,7 @@ Content-Type: ${c5.type || "application/octet-stream"}\r
         } else {
           newResult[${o5}] = ${n6}.value;
         }
-        
+
       `);
             }
             t4.write("payload.value = newResult;"), t4.write("return payload;");
@@ -223789,7 +223789,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
             })));
           }
         }
-        
+
         if (${id}.value === undefined) {
           if (${k3} in input) {
             newResult[${k3}] = undefined;
@@ -223797,7 +223797,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
         } else {
           newResult[${k3}] = ${id}.value;
         }
-        
+
       `);
       } else if (!isOptionalIn) {
         doc.write(`
@@ -223834,7 +223834,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
             path: iss.path ? [${k3}, ...iss.path] : [${k3}]
           })));
         }
-        
+
         if (${id}.value === undefined) {
           if (${k3} in input) {
             newResult[${k3}] = undefined;
@@ -223842,7 +223842,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
         } else {
           newResult[${k3}] = ${id}.value;
         }
-        
+
       `);
       }
     }
@@ -241135,7 +241135,7 @@ var StdioServerTransport = class {
 
 // src/server.ts
 import { spawnSync as spawnSync2 } from "node:child_process";
-import { chmodSync as chmodSync3, mkdirSync as mkdirSync3, renameSync, rmSync as rmSync3, writeFileSync as writeFileSync2 } from "node:fs";
+import { chmodSync as chmodSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, renameSync, rmSync as rmSync3, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { dirname as dirname3, join as join2 } from "node:path";
 
@@ -241171,9 +241171,441 @@ async function resolveCheckout(cwd) {
   return resolved;
 }
 
+// src/cursor-session.ts
+init_esm5();
+import { randomUUID as randomUUID3 } from "node:crypto";
+var TERMINAL = /* @__PURE__ */ new Set([
+  "finished",
+  "auth_error",
+  "backend_error",
+  "cancelled",
+  "timed_out"
+]);
+var MAX_ACTIVITIES = 250;
+var SESSION_TTL_MS = 30 * 6e4;
+var CursorSessionManager = class {
+  constructor(dependencies) {
+    this.dependencies = dependencies;
+  }
+  dependencies;
+  sessions = /* @__PURE__ */ new Map();
+  start(input) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const configuredKey = this.configuredKey();
+    const session = {
+      session_id: randomUUID3(),
+      auth_state: "configured",
+      auth_message: "Cursor API key is configured but has not yet been verified.",
+      checkout: input.cwd,
+      model: input.model ?? "auto",
+      mode: input.mode ?? "agent",
+      prompt: this.redact(input.prompt, configuredKey),
+      status: "starting",
+      activities: [],
+      updated_at: now,
+      timeoutMs: input.timeoutMs ?? 30 * 6e4,
+      sequence: 0,
+      generation: 1,
+      runPrompt: input.prompt
+    };
+    this.sessions.set(session.session_id, session);
+    this.armTimeout(session);
+    void this.launchNew(session, session.generation);
+    return this.snapshot(session);
+  }
+  read(sessionId) {
+    return this.snapshot(this.requireSession(sessionId));
+  }
+  followUp(sessionId, prompt, model = "auto") {
+    const session = this.requireSession(sessionId);
+    if (session.status !== "finished" || !session.agentId) {
+      throw new Error("Follow-up is available only after a successful Cursor run.");
+    }
+    this.resetForRun(session, prompt, model);
+    void this.launchFollowUp(session, session.generation);
+    return this.snapshot(session);
+  }
+  retry(sessionId) {
+    const session = this.requireSession(sessionId);
+    if (!TERMINAL.has(session.status) || session.status === "finished") {
+      throw new Error("Retry is available only after an auth, backend, cancellation, or timeout failure.");
+    }
+    session.agentId = void 0;
+    this.resetForRun(session, session.runPrompt, session.model);
+    void this.launchNew(session, session.generation);
+    return this.snapshot(session);
+  }
+  async cancel(sessionId) {
+    const session = this.requireSession(sessionId);
+    if (session.status !== "starting" && session.status !== "running") {
+      return this.snapshot(session);
+    }
+    session.status = "cancelled";
+    session.error = { kind: "cancelled", message: "Cursor session cancelled by the user." };
+    this.touch(session);
+    this.addActivity(session, { type: "status", status: "CANCELLED", text: session.error.message });
+    this.clearTimeout(session);
+    try {
+      await session.run?.cancel();
+    } finally {
+      this.closeAgent(session);
+      this.scheduleCleanup(session);
+    }
+    return this.snapshot(session);
+  }
+  closeAll() {
+    for (const session of this.sessions.values()) {
+      this.clearTimeout(session);
+      if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
+      this.closeAgent(session);
+    }
+  }
+  async launchNew(session, generation) {
+    let key;
+    let agent;
+    try {
+      session.checkout = await this.dependencies.resolveCheckout(session.checkout);
+      if (generation !== session.generation || this.isStopped(session)) return;
+      key = this.dependencies.apiKey();
+      session.auth_state = "configured";
+      agent = await this.dependencies.createAgent({
+        apiKey: key,
+        model: { id: session.model },
+        mode: session.mode,
+        local: { cwd: session.checkout }
+      });
+      if (generation !== session.generation || this.isStopped(session)) {
+        agent.close();
+        return;
+      }
+      session.agent = agent;
+      session.agentId = agent.agentId;
+      await this.sendAndObserve(session, agent, session.runPrompt, void 0, key, generation);
+    } catch (error52) {
+      if (agent) this.closeAgent(session, agent);
+      this.fail(session, error52, key, generation);
+    }
+  }
+  async launchFollowUp(session, generation) {
+    let key;
+    let agent;
+    try {
+      key = this.dependencies.apiKey();
+      agent = await this.dependencies.resumeAgent(session.agentId, {
+        apiKey: key,
+        local: { cwd: session.checkout }
+      });
+      if (generation !== session.generation || this.isStopped(session)) {
+        agent.close();
+        return;
+      }
+      session.agent = agent;
+      await this.sendAndObserve(
+        session,
+        agent,
+        session.runPrompt,
+        { model: { id: session.model }, mode: session.mode },
+        key,
+        generation
+      );
+    } catch (error52) {
+      if (agent) this.closeAgent(session, agent);
+      this.fail(session, error52, key, generation);
+    }
+  }
+  async sendAndObserve(session, agent, prompt, options2, key, generation) {
+    if (generation !== session.generation || this.isStopped(session)) {
+      this.closeAgent(session, agent);
+      return;
+    }
+    const run = await agent.send(prompt, options2);
+    if (generation !== session.generation || this.isStopped(session)) {
+      await run.cancel();
+      this.closeAgent(session, agent);
+      return;
+    }
+    session.run = run;
+    session.run_id = run.id;
+    session.status = "running";
+    session.auth_state = "configured";
+    session.auth_message = "Cursor authentication accepted for this session.";
+    this.touch(session);
+    const removeStatusListener = run.onDidChangeStatus((status) => {
+      if (generation === session.generation && !TERMINAL.has(session.status)) {
+        this.addActivity(session, { type: "status", status: status.toUpperCase() });
+      }
+    });
+    const resultPromise = run.wait();
+    try {
+      if (run.supports("stream")) {
+        try {
+          for await (const message of run.stream()) {
+            if (generation !== session.generation) break;
+            this.captureMessage(session, message, key);
+          }
+        } catch (error52) {
+          this.addActivity(session, {
+            type: "status",
+            status: "STREAM_ERROR",
+            text: this.safeMessage(error52, key)
+          });
+        }
+      }
+      this.complete(session, await resultPromise, key, generation);
+    } finally {
+      removeStatusListener();
+      this.closeAgent(session, agent);
+      if (generation === session.generation && TERMINAL.has(session.status)) this.scheduleCleanup(session);
+    }
+  }
+  captureMessage(session, message, key) {
+    switch (message.type) {
+      case "assistant":
+        for (const block of message.message.content) {
+          if (block.type === "text") {
+            this.addActivity(session, { type: "assistant", text: this.redact(block.text, key) });
+          } else {
+            this.addActivity(session, {
+              type: "tool",
+              tool: block.name,
+              status: "requested",
+              args: this.sanitize(block.input, key)
+            });
+          }
+        }
+        break;
+      case "tool_call":
+        this.addActivity(session, {
+          type: "tool",
+          tool: message.name,
+          status: message.status,
+          args: this.sanitize(message.args, key),
+          result: this.sanitize(message.result, key)
+        });
+        break;
+      case "thinking":
+        this.addActivity(session, { type: "thinking", text: this.redact(message.text, key) });
+        break;
+      case "status":
+        this.addActivity(session, {
+          type: "status",
+          status: message.status,
+          text: message.message ? this.redact(message.message, key) : void 0
+        });
+        if (message.status === "EXPIRED" && !TERMINAL.has(session.status)) {
+          session.status = "timed_out";
+          session.error = { kind: "timeout", message: "Cursor reported that the run expired." };
+        }
+        break;
+      case "task":
+        this.addActivity(session, {
+          type: "task",
+          status: message.status,
+          text: message.text ? this.redact(message.text, key) : void 0
+        });
+        break;
+      case "usage":
+        session.usage = message.usage;
+        this.addActivity(session, { type: "usage", text: `${message.usage.totalTokens} tokens` });
+        break;
+    }
+  }
+  complete(session, result, key, generation) {
+    if (generation !== session.generation) return;
+    this.clearTimeout(session);
+    if (session.status === "cancelled" || session.status === "timed_out") return;
+    session.duration_ms = result.durationMs;
+    session.usage = result.usage ?? session.usage;
+    if (result.status === "finished") {
+      session.status = "finished";
+      session.response = result.result ? this.redact(result.result, key) : void 0;
+      session.error = void 0;
+    } else if (result.status === "cancelled") {
+      session.status = "cancelled";
+      session.error = { kind: "cancelled", message: "Cursor cancelled the run." };
+    } else {
+      session.status = "backend_error";
+      session.error = {
+        kind: "backend",
+        message: this.redact(result.error?.message ?? "Cursor run failed.", key),
+        code: result.error?.code
+      };
+    }
+    this.touch(session);
+  }
+  fail(session, error52, key, generation) {
+    if (generation !== session.generation) return;
+    if (session.status === "cancelled" || session.status === "timed_out") {
+      this.closeAgent(session);
+      return;
+    }
+    this.clearTimeout(session);
+    const message = this.safeMessage(error52, key);
+    const code = error52 instanceof CursorSdkError ? error52.code : void 0;
+    const status = error52 instanceof CursorSdkError ? error52.status : void 0;
+    const missing = !key && /CURSOR_API_KEY is not configured/.test(message);
+    const auth = missing || error52 instanceof AuthenticationError || status === 401 || code === "unauthenticated" || /unauth|api key/i.test(message);
+    const revoked = auth && /revok/i.test(`${code ?? ""} ${message}`);
+    const timedOut = !auth && (status === 504 || /timeout|timed_out|deadline|expired/i.test(`${code ?? ""} ${message}`));
+    if (auth) {
+      session.status = "auth_error";
+      session.auth_state = missing ? "missing" : revoked ? "revoked" : "invalid";
+      session.auth_message = missing ? "No Cursor API key is configured." : revoked ? "The configured Cursor API key was revoked." : "Cursor rejected the configured API key.";
+      session.error = { kind: "auth", message: session.auth_message, code };
+    } else if (timedOut) {
+      session.status = "timed_out";
+      session.error = { kind: "timeout", message, code };
+    } else {
+      session.status = "backend_error";
+      session.error = { kind: "backend", message, code };
+    }
+    this.addActivity(session, { type: "status", status: session.status.toUpperCase(), text: message });
+    this.closeAgent(session);
+    this.scheduleCleanup(session);
+  }
+  async timeout(session) {
+    if (session.status !== "starting" && session.status !== "running") return;
+    session.status = "timed_out";
+    session.error = { kind: "timeout", message: `Cursor session timed out after ${session.timeoutMs} ms.` };
+    this.touch(session);
+    this.addActivity(session, { type: "status", status: "TIMED_OUT", text: session.error.message });
+    try {
+      await session.run?.cancel();
+    } catch (error52) {
+      this.addActivity(session, {
+        type: "status",
+        status: "CANCEL_FAILED",
+        text: this.safeMessage(error52, this.configuredKey())
+      });
+    } finally {
+      this.closeAgent(session);
+      this.scheduleCleanup(session);
+    }
+  }
+  resetForRun(session, prompt, model) {
+    if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
+    session.cleanupTimer = void 0;
+    session.runPrompt = prompt;
+    session.prompt = this.redact(prompt, this.configuredKey());
+    session.model = model;
+    session.status = "starting";
+    session.run_id = void 0;
+    session.response = void 0;
+    session.error = void 0;
+    session.duration_ms = void 0;
+    session.usage = void 0;
+    session.generation += 1;
+    this.touch(session);
+    this.addActivity(session, { type: "status", status: "STARTING", text: "Starting Cursor run." });
+    this.armTimeout(session);
+  }
+  addActivity(session, activity) {
+    session.activities.push({
+      sequence: ++session.sequence,
+      at: (/* @__PURE__ */ new Date()).toISOString(),
+      ...activity
+    });
+    if (session.activities.length > MAX_ACTIVITIES) session.activities.shift();
+    this.touch(session);
+  }
+  snapshot(session) {
+    const terminalFailure = TERMINAL.has(session.status) && session.status !== "finished";
+    return {
+      session_id: session.session_id,
+      auth_state: session.auth_state,
+      auth_message: session.auth_message,
+      checkout: session.checkout,
+      model: session.model,
+      mode: session.mode,
+      prompt: this.redact(session.prompt, this.configuredKey()),
+      status: session.status,
+      run_id: session.run_id,
+      activities: structuredClone(session.activities),
+      response: session.response,
+      error: session.error ? { ...session.error } : void 0,
+      duration_ms: session.duration_ms,
+      usage: session.usage ? { ...session.usage } : void 0,
+      updated_at: session.updated_at,
+      can_follow_up: session.status === "finished" && !!session.agentId,
+      can_cancel: session.status === "starting" || session.status === "running",
+      can_retry: terminalFailure
+    };
+  }
+  requireSession(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error("Cursor session was not found. It may have expired or the MCP server restarted.");
+    }
+    return session;
+  }
+  armTimeout(session) {
+    this.clearTimeout(session);
+    session.timer = setTimeout(() => void this.timeout(session), session.timeoutMs);
+    session.timer.unref();
+  }
+  clearTimeout(session) {
+    if (session.timer) clearTimeout(session.timer);
+    session.timer = void 0;
+  }
+  scheduleCleanup(session) {
+    if (session.cleanupTimer) clearTimeout(session.cleanupTimer);
+    session.cleanupTimer = setTimeout(() => this.sessions.delete(session.session_id), SESSION_TTL_MS);
+    session.cleanupTimer.unref();
+  }
+  closeAgent(session, agent = session.agent) {
+    agent?.close();
+    if (session.agent === agent) {
+      session.agent = void 0;
+      session.run = void 0;
+    }
+  }
+  touch(session) {
+    session.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+  }
+  isStopped(session) {
+    return session.status === "cancelled" || session.status === "timed_out";
+  }
+  safeMessage(error52, key) {
+    return this.redact(error52 instanceof Error ? error52.message : String(error52), key);
+  }
+  configuredKey() {
+    try {
+      return this.dependencies.apiKey();
+    } catch {
+      return void 0;
+    }
+  }
+  sanitize(value, key) {
+    if (typeof value === "string") return this.redact(value, key);
+    if (Array.isArray(value)) return value.map((item) => this.sanitize(item, key));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([name, item]) => [
+          name,
+          /api.?key|authorization|token|secret/i.test(name) ? "[REDACTED]" : this.sanitize(item, key)
+        ])
+      );
+    }
+    return value;
+  }
+  redact(value, key) {
+    let redacted = key ? value.replaceAll(key, "[REDACTED]") : value;
+    redacted = redacted.replace(/(?:CURSOR_API_KEY\s*[=:]\s*|Bearer\s+)[^\s"']+/gi, "$1[REDACTED]");
+    return redacted;
+  }
+};
+var cursorSessionManager = (apiKey2, resolveCheckout2) => new CursorSessionManager({
+  apiKey: apiKey2,
+  resolveCheckout: resolveCheckout2,
+  createAgent: (options2) => Yt.create(options2),
+  resumeAgent: (agentId, options2) => Yt.resume(agentId, options2)
+});
+
 // src/server.ts
 var CURSOR_API_KEYS_URL = "https://cursor.com/dashboard/api?section=user-keys#user-api-keys";
 var CURSOR_ENV_FILE = join2(homedir2(), ".config", "agent-adaptor", ".env");
+var SESSION_PANEL_URI = "ui://agent-adaptor/cursor-session.html";
+var SESSION_PANEL_MIME_TYPE = "text/html;profile=mcp-app";
 var server = new McpServer({ name: "cursor", version: "0.1.0" });
 var writeAnnotations = {
   readOnlyHint: false,
@@ -241206,6 +241638,8 @@ try {
 } catch (error52) {
   if (error52.code !== "ENOENT") throw error52;
 }
+var sessions = cursorSessionManager(apiKey, resolveCheckout);
+process.on("exit", () => sessions.closeAll());
 function configureFromClipboard() {
   if (process.platform !== "darwin") {
     throw new Error("Clipboard setup currently supports macOS only. Set CURSOR_API_KEY instead.");
@@ -241262,6 +241696,99 @@ async function failure(operation) {
     };
   }
 }
+function sessionResponse(action, session) {
+  const summary = [
+    `Cursor session ${session.session_id}: ${session.status}.`,
+    `Mode: ${session.mode}. Model: ${session.model}. Checkout: ${session.checkout}.`,
+    session.mode === "agent" ? "Agent mode may edit files or run commands." : "Plan mode is read-only planning.",
+    session.response ? `Final response:
+${session.response}` : void 0,
+    session.error ? `${session.error.kind} error: ${session.error.message}` : void 0
+  ].filter(Boolean).join("\n");
+  return {
+    content: [{ type: "text", text: summary }],
+    structuredContent: { version: 1, action, session },
+    _meta: { "openai/outputTemplate": SESSION_PANEL_URI }
+  };
+}
+server.registerResource(
+  "Live Cursor Session Panel",
+  SESSION_PANEL_URI,
+  {
+    title: "Live Cursor Session Panel",
+    description: "Live Cursor session status, output, and controls.",
+    mimeType: SESSION_PANEL_MIME_TYPE,
+    _meta: { ui: { prefersBorder: true } }
+  },
+  () => ({
+    contents: [
+      {
+        uri: SESSION_PANEL_URI,
+        mimeType: SESSION_PANEL_MIME_TYPE,
+        text: readFileSync2(new URL("./session-panel.html", import.meta.url), "utf8"),
+        _meta: { ui: { prefersBorder: true } }
+      }
+    ]
+  })
+);
+var sessionInput = external_exports2.discriminatedUnion("action", [
+  external_exports2.object({
+    action: external_exports2.literal("start"),
+    cwd: external_exports2.string().describe("Absolute path to the current checkout"),
+    prompt: external_exports2.string().min(1).describe("Task for Cursor"),
+    model: external_exports2.string().min(1).default("auto").describe("Cursor model ID"),
+    mode: external_exports2.enum(["agent", "plan"]).default("agent"),
+    timeout_ms: external_exports2.number().int().min(1e3).max(4 * 60 * 6e4).default(30 * 6e4)
+  }),
+  external_exports2.object({ action: external_exports2.literal("read"), session_id: external_exports2.string().uuid() }),
+  external_exports2.object({
+    action: external_exports2.literal("follow_up"),
+    session_id: external_exports2.string().uuid(),
+    prompt: external_exports2.string().min(1),
+    model: external_exports2.string().min(1).default("auto")
+  }),
+  external_exports2.object({ action: external_exports2.literal("cancel"), session_id: external_exports2.string().uuid() }),
+  external_exports2.object({ action: external_exports2.literal("retry"), session_id: external_exports2.string().uuid() })
+]);
+server.registerTool(
+  "cursor_session",
+  {
+    title: "Open live Cursor session",
+    description: "Start and control a live Cursor session panel. Start returns immediately; read polls status. Agent mode may edit files or run commands.",
+    inputSchema: sessionInput,
+    annotations: writeAnnotations,
+    _meta: {
+      ui: { resourceUri: SESSION_PANEL_URI, visibility: ["model", "app"] },
+      "ui/resourceUri": SESSION_PANEL_URI
+    }
+  },
+  (input) => failure(async () => {
+    switch (input.action) {
+      case "start":
+        return sessionResponse(
+          input.action,
+          sessions.start({
+            cwd: input.cwd,
+            prompt: input.prompt,
+            model: input.model,
+            mode: input.mode,
+            timeoutMs: input.timeout_ms
+          })
+        );
+      case "read":
+        return sessionResponse(input.action, sessions.read(input.session_id));
+      case "follow_up":
+        return sessionResponse(
+          input.action,
+          sessions.followUp(input.session_id, input.prompt, input.model)
+        );
+      case "cancel":
+        return sessionResponse(input.action, await sessions.cancel(input.session_id));
+      case "retry":
+        return sessionResponse(input.action, sessions.retry(input.session_id));
+    }
+  })
+);
 server.registerTool(
   "cursor_configure_from_clipboard",
   {

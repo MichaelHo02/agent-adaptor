@@ -2,16 +2,19 @@ import { Agent, type AgentOptions, type RunResult } from "@cursor/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
 import { confirmClipboardAccess } from "./clipboard-confirmation.js";
 import { resolveCheckout } from "./checkout.js";
+import { cursorSessionManager, type SessionSnapshot } from "./cursor-session.js";
 
 const CURSOR_API_KEYS_URL = "https://cursor.com/dashboard/api?section=user-keys#user-api-keys";
 const CURSOR_ENV_FILE = join(homedir(), ".config", "agent-adaptor", ".env");
+const SESSION_PANEL_URI = "ui://agent-adaptor/cursor-session.html";
+const SESSION_PANEL_MIME_TYPE = "text/html;profile=mcp-app";
 const server = new McpServer({ name: "cursor", version: "0.1.0" });
 const writeAnnotations = {
   readOnlyHint: false,
@@ -47,6 +50,9 @@ try {
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
+
+const sessions = cursorSessionManager(apiKey, resolveCheckout);
+process.on("exit", () => sessions.closeAll());
 
 function configureFromClipboard() {
   if (process.platform !== "darwin") {
@@ -109,6 +115,106 @@ async function failure<T>(operation: () => Promise<T>) {
     };
   }
 }
+
+function sessionResponse(action: string, session: SessionSnapshot) {
+  const summary = [
+    `Cursor session ${session.session_id}: ${session.status}.`,
+    `Mode: ${session.mode}. Model: ${session.model}. Checkout: ${session.checkout}.`,
+    session.mode === "agent" ? "Agent mode may edit files or run commands." : "Plan mode is read-only planning.",
+    session.response ? `Final response:\n${session.response}` : undefined,
+    session.error ? `${session.error.kind} error: ${session.error.message}` : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return {
+    content: [{ type: "text" as const, text: summary }],
+    structuredContent: { version: 1, action, session },
+    _meta: { "openai/outputTemplate": SESSION_PANEL_URI },
+  };
+}
+
+server.registerResource(
+  "Live Cursor Session Panel",
+  SESSION_PANEL_URI,
+  {
+    title: "Live Cursor Session Panel",
+    description: "Live Cursor session status, output, and controls.",
+    mimeType: SESSION_PANEL_MIME_TYPE,
+    _meta: { ui: { prefersBorder: true } },
+  },
+  () => ({
+    contents: [
+      {
+        uri: SESSION_PANEL_URI,
+        mimeType: SESSION_PANEL_MIME_TYPE,
+        text: readFileSync(new URL("./session-panel.html", import.meta.url), "utf8"),
+        _meta: { ui: { prefersBorder: true } },
+      },
+    ],
+  }),
+);
+
+const sessionInput = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("start"),
+    cwd: z.string().describe("Absolute path to the current checkout"),
+    prompt: z.string().min(1).describe("Task for Cursor"),
+    model: z.string().min(1).default("auto").describe("Cursor model ID"),
+    mode: z.enum(["agent", "plan"]).default("agent"),
+    timeout_ms: z.number().int().min(1_000).max(4 * 60 * 60_000).default(30 * 60_000),
+  }),
+  z.object({ action: z.literal("read"), session_id: z.string().uuid() }),
+  z.object({
+    action: z.literal("follow_up"),
+    session_id: z.string().uuid(),
+    prompt: z.string().min(1),
+    model: z.string().min(1).default("auto"),
+  }),
+  z.object({ action: z.literal("cancel"), session_id: z.string().uuid() }),
+  z.object({ action: z.literal("retry"), session_id: z.string().uuid() }),
+]);
+
+server.registerTool(
+  "cursor_session",
+  {
+    title: "Open live Cursor session",
+    description:
+      "Start and control a live Cursor session panel. Start returns immediately; read polls status. Agent mode may edit files or run commands.",
+    inputSchema: sessionInput,
+    annotations: writeAnnotations,
+    _meta: {
+      ui: { resourceUri: SESSION_PANEL_URI, visibility: ["model", "app"] },
+      "ui/resourceUri": SESSION_PANEL_URI,
+    },
+  },
+  (input) =>
+    failure(async () => {
+      switch (input.action) {
+        case "start":
+          return sessionResponse(
+            input.action,
+            sessions.start({
+              cwd: input.cwd,
+              prompt: input.prompt,
+              model: input.model,
+              mode: input.mode,
+              timeoutMs: input.timeout_ms,
+            }),
+          );
+        case "read":
+          return sessionResponse(input.action, sessions.read(input.session_id));
+        case "follow_up":
+          return sessionResponse(
+            input.action,
+            sessions.followUp(input.session_id, input.prompt, input.model),
+          );
+        case "cancel":
+          return sessionResponse(input.action, await sessions.cancel(input.session_id));
+        case "retry":
+          return sessionResponse(input.action, sessions.retry(input.session_id));
+      }
+    }),
+);
 
 server.registerTool(
   "cursor_configure_from_clipboard",

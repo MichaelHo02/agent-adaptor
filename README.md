@@ -2,14 +2,23 @@
 
 Agent Adaptor is a Codex plugin that delegates coding tasks to Cursor agents running against your current local checkout.
 
-It uses Cursor's official TypeScript SDK through the `cursor` MCP server and exposes four tools:
+It uses Cursor's official TypeScript SDK through the `cursor` MCP server and exposes five tools:
 
 - `cursor_configure_from_clipboard` securely stores a copied Cursor User API Key on macOS.
 - `cursor_run` starts a new Cursor agent.
 - `cursor_follow_up` continues the same agent conversation.
 - `cursor_auth_status` checks whether the MCP received `CURSOR_API_KEY`.
+- `cursor_session` opens a live MCP App panel and supports `start`, `read`, `follow_up`, `cancel`, and `retry` actions.
 
 Cursor can read, edit, and run code in the checkout you pass. Review its changes as you would any other coding agent.
+
+## Live session panel
+
+Call `cursor_session` with `action: "start"`, an absolute checkout path, a prompt, and either `agent` or `plan` mode. The tool returns immediately after creating the in-memory session; a compatible MCP Apps host opens the panel while the server starts Cursor in the background. The panel polls through the sandboxed host bridge and shows auth, checkout, model, mode, prompt, status, available assistant/tool activity, final output, errors, duration, and usage.
+
+Follow-up, cancel, and retry controls send only the opaque session ID and their action-specific input. Agent identity and checkout remain bound on the server, follow-up defaults explicitly to model `auto`, and the browser never receives the API key. Hosts without MCP Apps support still receive a useful text response and `structuredContent` snapshot.
+
+Session state is intentionally in memory for this MVP. Terminal snapshots expire after 30 minutes, active Cursor handles close after terminal completion/cancellation, and restarting the MCP server ends all live panels. No history or database is maintained.
 
 ## Requirements
 
@@ -66,6 +75,6 @@ The committed bundle lets the plugin run from this checkout. Rebuild it after ch
 
 ## Security
 
-The clipboard is read only after the user approves a native macOS confirmation dialog. The saved key file and its parent directory use owner-only permissions. `CURSOR_API_KEY` can override the saved value and is never accepted as a tool argument. Cursor's local agent runs with the permissions and sandbox policy configured for Cursor on your machine.
+The clipboard is read only after the user approves a native macOS confirmation dialog. The saved key file and its parent directory use owner-only permissions. `CURSOR_API_KEY` can override the saved value and is never accepted as a tool argument or returned to the model or panel. Cursor's local agent runs with the permissions and sandbox policy configured for Cursor on your machine.
 
 As of the initial release, `npm audit` reports an unfixed `undici` advisory inherited through the official Cursor SDK. Recheck the audit before production use and update the SDK when Cursor ships a patched dependency chain.
