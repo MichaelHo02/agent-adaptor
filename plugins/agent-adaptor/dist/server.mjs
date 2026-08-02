@@ -241174,7 +241174,8 @@ function safeCliStatus() {
   const child = spawnSync("cursor-agent", ["status"], {
     encoding: "utf8",
     timeout: 5e3,
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env
   });
   if (child.error) {
     return { ok: false, error: `cursor-agent command not available: ${child.error.message}` };
@@ -241278,8 +241279,9 @@ server.registerTool(
             auth_source: process.env.CURSOR_API_KEY_FILE ? `CURSOR_API_KEY_FILE (${process.env.CURSOR_API_KEY_FILE})` : process.env.CURSOR_API_KEY ? "CURSOR_API_KEY" : "not configured",
             env_key_present: !!process.env.CURSOR_API_KEY,
             key_file_present: !!process.env.CURSOR_API_KEY_FILE,
-            cursor_cli_status: safeCliStatus(),
-            next_step: process.env.CURSOR_API_KEY || process.env.CURSOR_API_KEY_FILE ? "MCP can use existing credentials. If tools still fail, run `cursor-agent login` and restart Codex task." : "Run `npm run cursor-auth` in this repo to launch browser login, then set CURSOR_API_KEY for the Codex MCP process."
+            shared_credential: "CURSOR_API_KEY (or CURSOR_API_KEY_FILE) is the shared credential. Agent Adaptor reads it from this MCP process, and cursor-agent inherits the same process environment.",
+            cursor_cli_status_with_mcp_env: safeCliStatus(),
+            mcp_api_key_action: process.env.CURSOR_API_KEY || process.env.CURSOR_API_KEY_FILE ? "Shared MCP API-key configuration is present. Start a new Codex task if this value was changed so the stdio MCP process inherits it." : "Set CURSOR_API_KEY or CURSOR_API_KEY_FILE for the Codex MCP process, then start a new Codex task. Browser cursor-agent login is a separate CLI session and does not supply this value."
           },
           null,
           2

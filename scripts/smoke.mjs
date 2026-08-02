@@ -14,6 +14,12 @@ await client.connect(transport);
 try {
   const names = (await client.listTools()).tools.map(({ name }) => name).sort();
   assert.deepEqual(names, ["cursor_auth_status", "cursor_follow_up", "cursor_run"]);
+  const authStatus = await client.callTool({ name: "cursor_auth_status", arguments: {} });
+  assert.notEqual(authStatus.isError, true);
+  const auth = JSON.parse(authStatus.content[0].text);
+  assert.match(auth.shared_credential, /shared credential/);
+  assert.match(auth.mcp_api_key_action, /CURSOR_API_KEY/);
+  assert.doesNotMatch(JSON.stringify(auth), /npm run cursor-auth/);
   const missingKey = await client.callTool({
     name: "cursor_run",
     arguments: { cwd: process.cwd(), prompt: "test" },

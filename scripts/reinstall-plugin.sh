@@ -3,16 +3,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AUTO_AUTH=false
 RUN_SMOKE=false
 
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/reinstall-plugin.sh [--auth] [--smoke] [--help]
+  scripts/reinstall-plugin.sh [--smoke] [--help]
 
 Options:
-  --auth    Launch browser login via Cursor CLI before install.
   --smoke   Run npm run smoke after install.
   --help    Show this help message.
 
@@ -23,9 +21,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --auth)
-      AUTO_AUTH=true
-      ;;
     --smoke)
       RUN_SMOKE=true
       ;;
@@ -50,11 +45,6 @@ npm install
 echo "==> Build MCP bundle"
 npm run build
 
-if [[ "$AUTO_AUTH" == true ]]; then
-  echo "==> Launch browser auth flow"
-  npm run cursor-auth
-fi
-
 echo "==> Install plugin into Codex"
 codex plugin marketplace add "$ROOT_DIR"
 codex plugin add agent-adaptor@agent-adaptor
@@ -64,4 +54,4 @@ if [[ "$RUN_SMOKE" == true ]]; then
   npm run smoke
 fi
 
-echo "==> Done. Restart Codex task so MCP process picks up env vars if needed."
+echo "==> Done. Set CURSOR_API_KEY or CURSOR_API_KEY_FILE for the MCP process, then restart the Codex task."

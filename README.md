@@ -27,16 +27,17 @@ npm run build
 export CURSOR_API_KEY="your-key"
 ```
 
-## First-time auth flow
+## Shared API-key configuration
 
-If you prefer browser auth first, run:
+Agent Adaptor and `cursor-agent` use the same `CURSOR_API_KEY` when it is inherited in their process environment:
 
 ```sh
-npm run cursor-auth
+export CURSOR_API_KEY="your-key"
 ```
 
-This opens Cursor's login flow in a browser. After success, copy your Cursor API key from the integrations dashboard and set it in the MCP process environment (or provide `CURSOR_API_KEY_FILE`).
-Cursor's website login does not currently emit the token back to this plugin process automatically.
+`CURSOR_API_KEY_FILE` is also supported when the MCP process receives a path to a file containing the key. The plugin never accepts a key as a tool argument or returns it in tool output.
+
+`cursor-agent login` is a separate browser session. It does not create, return, or configure `CURSOR_API_KEY` for the MCP. After changing the key in Codex plugin settings or its launch environment, start a new Codex task so the stdio MCP process inherits the new value.
 
 To quickly check the plugin auth wiring after auth, use this MCP tool:
 
@@ -57,12 +58,6 @@ Start a new Codex task after installation so Codex discovers the plugin tools.
 ```sh
 chmod +x scripts/reinstall-plugin.sh
 npm run reinstall-plugin -- --smoke
-```
-
-With browser auth flow in the same run:
-
-```sh
-npm run reinstall-plugin -- --auth --smoke
 ```
 
 With an already-exported key:
