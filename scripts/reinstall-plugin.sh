@@ -15,7 +15,7 @@ Options:
   --help    Show this help message.
 
 Environment:
-  CURSOR_API_KEY or CURSOR_API_KEY_FILE can be set beforehand.
+  CURSOR_API_KEY can be set as an override.
 EOF
 }
 
@@ -54,4 +54,4 @@ if [[ "$RUN_SMOKE" == true ]]; then
   npm run smoke
 fi
 
-echo "==> Done. Set CURSOR_API_KEY or CURSOR_API_KEY_FILE for the MCP process, then restart the Codex task."
+echo "==> Done. Start a new Codex task, copy a Cursor User API Key, and ask Agent Adaptor to configure Cursor from the clipboard."

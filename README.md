@@ -2,11 +2,12 @@
 
 Agent Adaptor is a Codex plugin that delegates coding tasks to Cursor agents running against your current local checkout.
 
-It uses Cursor's official TypeScript SDK and exposes three MCP tools:
+It uses Cursor's official TypeScript SDK through the `cursor` MCP server and exposes four tools:
 
+- `cursor_configure_from_clipboard` securely stores a copied Cursor User API Key on macOS.
 - `cursor_run` starts a new Cursor agent.
 - `cursor_follow_up` continues the same agent conversation.
-- `cursor_auth_status` checks MCP auth wiring and `cursor-agent status` output.
+- `cursor_auth_status` checks whether the MCP received `CURSOR_API_KEY`.
 
 Cursor can read, edit, and run code in the checkout you pass. Review its changes as you would any other coding agent.
 
@@ -14,7 +15,7 @@ Cursor can read, edit, and run code in the checkout you pass. Review its changes
 
 - Node.js 22.13 or newer
 - A Cursor plan with SDK access
-- A Cursor API key from the Cursor integrations dashboard
+- A [Cursor User API Key](https://cursor.com/dashboard/api?section=user-keys#user-api-keys)
 
 ## Local setup
 
@@ -27,21 +28,15 @@ npm run build
 export CURSOR_API_KEY="your-key"
 ```
 
-## Shared API-key configuration
+## Cursor API-key configuration
 
-Agent Adaptor and `cursor-agent` use the same `CURSOR_API_KEY` when it is inherited in their process environment:
+Create and copy a key at [Cursor User API Keys](https://cursor.com/dashboard/api?section=user-keys#user-api-keys), then ask Codex to configure Cursor from your clipboard. The `cursor_configure_from_clipboard` tool saves it to `~/.config/agent-adaptor/.env` with owner-only permissions, clears the clipboard, and enables Cursor immediately.
 
-```sh
-export CURSOR_API_KEY="your-key"
-```
-
-`CURSOR_API_KEY_FILE` is also supported when the MCP process receives a path to a file containing the key. The plugin never accepts a key as a tool argument or returns it in tool output.
-
-`cursor-agent login` is a separate browser session. It does not create, return, or configure `CURSOR_API_KEY` for the MCP. After changing the key in Codex plugin settings or its launch environment, start a new Codex task so the stdio MCP process inherits the new value.
+The plugin never accepts the key as a tool argument or returns it in tool output. `CURSOR_API_KEY` remains available as an environment-variable override.
 
 To quickly check the plugin auth wiring after auth, use this MCP tool:
 
-- `cursor_auth_status` (reports whether `CURSOR_API_KEY` is available to MCP and `cursor-agent status` output)
+- `cursor_auth_status` (reports whether `CURSOR_API_KEY` is available to the `cursor` MCP)
 
 Then continue:
 
@@ -60,10 +55,9 @@ chmod +x scripts/reinstall-plugin.sh
 npm run reinstall-plugin -- --smoke
 ```
 
-With an already-exported key:
+With an already-configured key:
 
 ```sh
-export CURSOR_API_KEY="your-key"
 npm run reinstall-plugin -- --smoke
 ```
 
@@ -79,6 +73,6 @@ The committed bundle lets the plugin run from this checkout. Rebuild it after ch
 
 ## Security
 
-`CURSOR_API_KEY` is inherited by the MCP process and is never accepted as a tool argument. Cursor's local agent runs with the permissions and sandbox policy configured for Cursor on your machine.
+The saved key file and its parent directory use owner-only permissions. `CURSOR_API_KEY` can override the saved value and is never accepted as a tool argument. Cursor's local agent runs with the permissions and sandbox policy configured for Cursor on your machine.
 
 As of the initial release, `npm audit` reports an unfixed `undici` advisory inherited through the official Cursor SDK. Recheck the audit before production use and update the SDK when Cursor ships a patched dependency chain.
