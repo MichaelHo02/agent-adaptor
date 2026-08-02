@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "reinstall-plugin": "./scripts/reinstall-plugin.sh",
+    "reinstall-plugin": "npm run verify-plugin",
     "check": "tsc --noEmit && node --import tsx --test test/*.test.ts",
     "smoke": "node scripts/smoke.mjs",
+    "verify-mcp": "npm run check && npm run build && npm run smoke",
+    "verify-plugin": "./scripts/reinstall-plugin.sh",
     "prepare": "npm run build"
   },
   "dependencies": {

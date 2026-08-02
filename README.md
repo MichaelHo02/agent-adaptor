@@ -50,25 +50,28 @@ To quickly check the plugin auth wiring after auth, use this MCP tool:
 
 - `cursor_auth_status` (reports whether `CURSOR_API_KEY` is available to the `cursor` MCP)
 
-## Repeatable install (testing)
+## Local development loop
+
+Use the fast checkout-only loop while editing server, panel, or session code. It builds and starts the checkout MCP server over stdio, then checks all five tools, the UI resource/MIME, and missing-auth behavior without making a paid Cursor call or changing the installed plugin:
 
 ```sh
-chmod +x scripts/reinstall-plugin.sh
-npm run reinstall-plugin -- --smoke
+npm run verify-mcp
 ```
 
-With an already-configured key:
+When the local MCP check passes and you need Codex to load the change, run the integration stage:
 
 ```sh
-npm run reinstall-plugin -- --smoke
+npm run verify-plugin
 ```
+
+It repeats the source checks, runs the official plugin and skill validators, creates one cachebuster with plugin-creator, confirms this checkout is the configured local marketplace source, reinstalls only `agent-adaptor@agent-adaptor`, byte-compares the installed cache, and reruns the same MCP smoke test against that cache. Then fully restart Codex and test direct `cursor_auth_status` and `cursor_session` calls in a genuinely new task; same-process tasks and forks retain stale registries and are not valid post-install checks.
 
 ## Development
 
 ```sh
 npm run check
 npm run build
-python3 /path/to/plugin-creator/scripts/validate_plugin.py plugins/agent-adaptor
+npm run verify-mcp
 ```
 
 The committed bundle lets the plugin run from this checkout. Rebuild it after changing `src/`.

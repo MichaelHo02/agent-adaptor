@@ -3,14 +3,19 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 assert.equal(process.platform, "darwin", "MCP smoke test currently supports macOS only.");
-const pluginManifest = JSON.parse(
-  readFileSync("plugins/agent-adaptor/.codex-plugin/plugin.json", "utf8"),
+const pluginRootArgument = process.argv.indexOf("--plugin-root");
+assert.notEqual(pluginRootArgument === process.argv.length - 1, true, "--plugin-root requires a path");
+const pluginRoot = resolve(
+  pluginRootArgument === -1 ? "plugins/agent-adaptor" : process.argv[pluginRootArgument + 1],
 );
-const appManifest = JSON.parse(readFileSync("plugins/agent-adaptor/.app.json", "utf8"));
-const mcpManifest = JSON.parse(readFileSync("plugins/agent-adaptor/.mcp.json", "utf8"));
+const pluginManifest = JSON.parse(
+  readFileSync(join(pluginRoot, ".codex-plugin/plugin.json"), "utf8"),
+);
+const appManifest = JSON.parse(readFileSync(join(pluginRoot, ".app.json"), "utf8"));
+const mcpManifest = JSON.parse(readFileSync(join(pluginRoot, ".mcp.json"), "utf8"));
 assert.equal(pluginManifest.apps, "./.app.json", "MCP App plugins must declare app packaging.");
 assert.deepEqual(appManifest, { apps: {} });
 assert.deepEqual(mcpManifest.mcpServers?.cursor, {
@@ -23,7 +28,7 @@ const smokeHome = mkdtempSync(join(tmpdir(), "agent-adaptor-smoke-"));
 const server = {
   command: "node",
   args: ["./dist/server.mjs"],
-  cwd: "plugins/agent-adaptor",
+  cwd: pluginRoot,
   env: { CURSOR_API_KEY: "", HOME: smokeHome, PATH: process.env.PATH ?? "" },
 };
 process.on("exit", () => rmSync(smokeHome, { recursive: true }));
@@ -110,4 +115,6 @@ try {
   await savedKeyClient.close();
 }
 
-console.log(`MCP smoke test passed: ${names.join(", ")} and live session UI resource`);
+console.log(
+  `MCP smoke test passed for ${pluginRoot}: ${names.join(", ")} and live session UI resource`,
+);
