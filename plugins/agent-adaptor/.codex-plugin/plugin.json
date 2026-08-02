@@ -1,6 +1,6 @@
 {
   "name": "agent-adaptor",
-  "version": "0.1.0+codex.20260802070846",
+  "version": "0.1.0+codex.1785656241638",
   "description": "Delegate work from Codex to a local Cursor agent.",
   "author": {
     "name": "H\u1ed3 L\u00ea Minh Th\u1ea1ch",

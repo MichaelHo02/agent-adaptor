@@ -1,3 +1,8 @@
+# Project scope
+
+- Target macOS only for now.
+- Do not add or maintain Linux or Windows compatibility unless the project scope is explicitly expanded.
+
 # Agent Adaptor Team
 
 ## Manager

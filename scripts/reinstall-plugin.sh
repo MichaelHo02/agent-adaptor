@@ -45,6 +45,15 @@ npm install
 echo "==> Build MCP bundle"
 npm run build
 
+echo "==> Refresh plugin cachebuster"
+node -e '
+const fs = require("node:fs");
+const path = process.argv[1];
+const manifest = fs.readFileSync(path, "utf8");
+const version = `${JSON.parse(manifest).version.replace(/\+codex\..*$/, "")}+codex.${Date.now()}`;
+fs.writeFileSync(path, manifest.replace(/("version"\s*:\s*")[^"]+(")/, `$1${version}$2`));
+' "$ROOT_DIR/plugins/agent-adaptor/.codex-plugin/plugin.json"
+
 echo "==> Install plugin into Codex"
 codex plugin marketplace add "$ROOT_DIR"
 codex plugin add agent-adaptor@agent-adaptor
